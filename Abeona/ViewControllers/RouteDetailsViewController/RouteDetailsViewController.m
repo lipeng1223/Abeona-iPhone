@@ -11,7 +11,7 @@
 
 @interface RouteDetailsViewController ()
 {
-    NSMutableArray *stopsArray;
+    NSIndexPath *selectedIndex;
     int lblY;
     BOOL isShowDetail;
     BOOL isSHowMapCell;
@@ -22,6 +22,11 @@
     NSArray *_polys;
     double _pos, _step;
     GMSCameraPosition *camera;
+    MBProgressHUD *progressBar;
+    ModelLocator *model;
+    NSDate *startDate;
+    
+     int apiCallCount;
 
 }
 @end
@@ -37,10 +42,86 @@
     [tableview registerNib:[UINib nibWithNibName:@"RouteTableViewCell" bundle:nil] forCellReuseIdentifier:@"routeDetailCell"];
     [tableview registerNib:[UINib nibWithNibName:@"RouteStopsTableViewCell" bundle:nil] forCellReuseIdentifier:@"DetailCell"];
      [tableview registerNib:[UINib nibWithNibName:@"RouteMapTableViewCell" bundle:nil] forCellReuseIdentifier:@"RouteMapTableViewCell"];
+    
+    
+    if (_isFlight) {
+        
+        self.lblTopSuggestion.text = [NSString stringWithFormat:@"Leave %@, arrive %@",[HelperClass getDate:self.departDate withFormat:@"HH:mm EEEE dd MMMM"], [HelperClass getDate:self.arrivalDate withFormat:@"HH:mm EEEE dd MMMM"]];
 
+    }else {
+        self.lblTopSuggestion.text = [NSString stringWithFormat:@"Leave %@, arrive %@",[HelperClass getDate:self.departDate withFormat:@"HH:mm EEEE dd MMMM"], [HelperClass getDate:self.arrivalDate withFormat:@"HH:mm"]];
+    }
+    model = [ModelLocator getInstance];
+   
     
-    stopsArray = [[NSMutableArray alloc] initWithObjects:@"StockPort[SPT]",@"Wilmslow[WML]",@"Crewe[CRE]",@"Nantwich[NAN]",@"Wem[WEM]",@"Ludlow[LUD]", nil];
+//    int yourSection = 0;
+//    int lastRow = (int)[self.tableview numberOfRowsInSection:yourSection] - 1;
+//   
+//    NSIndexPath *indexPath = [NSIndexPath indexPathForRow:lastRow-1 inSection:0];
+//   // [self.tableview scrollToRowAtIndexPath:indexPath atScrollPosition:UITableViewScrollPositionBottom animated:NO];
+}
+
+-(void)viewDidAppear:(BOOL)animated
+{
+    [super viewDidAppear:animated];
+    [self.view layoutIfNeeded];
+    //[self.tableview scrollToRowAtIndexPath:0 atScrollPosition:UITableViewScrollPositionTop animated:NO];
+//    int lastRow = 0;
+//    
+//    NSIndexPath *indexPath = [NSIndexPath indexPathForRow:lastRow inSection:0];
+//    [self.tableview scrollToRowAtIndexPath:indexPath atScrollPosition:UITableViewScrollPositionTop animated:NO];
+    [self.tableview reloadData];
+}
+
+- (void)viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+  
+}
+
+
+
+- (IBAction)showStopsView:(id)sender {
     
+    NSIndexPath *indexPath = [NSIndexPath indexPathForRow:[sender tag] inSection:0];
+    RouteTableViewCell *stopsCell = (RouteTableViewCell *)[tableview cellForRowAtIndexPath:indexPath];
+    
+    NSString *mode_type = [self stringByStrippingHTML:[[model.transitSteps objectAtIndex:indexPath.row] valueForKey:@"travel_mode"]];
+    
+    if ([mode_type isEqualToString:@"TRANSIT"]) {
+        isSHowMapCell = false;
+        [self showHideViewsForTransitCell:stopsCell andIndexPath:indexPath];
+        if (isShowDetail) {
+            isShowDetail = false;
+        }else {
+            isShowDetail = true;
+        }
+        [tableview reloadData];
+    }else {
+        isShowDetail = false;
+        [self showHideViewsForTransitCell:stopsCell andIndexPath:indexPath];
+        if (isSHowMapCell) {
+            isSHowMapCell = false;
+        }else {
+            isSHowMapCell = true;
+        }
+        [tableview reloadData];
+    }
+    selectedIndex = indexPath;
+    [self showHideViewsForTransitCell:stopsCell andIndexPath:indexPath];
+    [tableview reloadData];
+}
+
+- (IBAction)showMapView:(id)sender {
+    NSIndexPath *indexPath = [NSIndexPath indexPathForRow:[sender tag] inSection:0];
+    RouteTableViewCell *routeCell = (RouteTableViewCell *)[tableview cellForRowAtIndexPath:indexPath];
+    if (isSHowMapCell) {
+        isSHowMapCell = false;
+    }else {
+        isSHowMapCell = true;
+    }
+    selectedIndex = indexPath;
+    [self showHideViewsForTransitCell:routeCell andIndexPath:indexPath];
+    [tableview reloadData];
 }
 
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
@@ -48,104 +129,448 @@
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-    return 3;
+    
+    if (_isFlight) {
+        return model.flightSegmentsArray.count;
+    }else if (_isDriving) {
+        return model.drivingSteps.count;
+    }else {
+        return model.transitSteps.count;
+    }
 }
 
 - (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath {
-    if (indexPath.row == 0 && isSHowMapCell) {
-        return 418;
-    }else if (indexPath.row != 0 && isShowDetail) {
-        return 379;
+   
+    if (_isFlight) {
+        return 165;
+    }else if (_isDriving) {
+        return 165;
     }else {
-        return 175;
+        if (model.legsDrivingDict) {
+            if (isShowDetail && indexPath == selectedIndex) {
+                return 210;
+            }else if (isSHowMapCell && indexPath == selectedIndex) {
+                return 400;
+            }else {
+                return 185;
+            }
+        }else {
+            // if from QPX
+            if (isShowDetail && indexPath == selectedIndex) {
+                return 240;
+            }else if (isSHowMapCell && indexPath == selectedIndex) {
+                return 400;
+            }else {
+                if (indexPath.row == 0) {
+                     return 175;
+                }else {
+                    return 145;
+                }
+            }
+        }
     }
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
     
+    if (_isFlight) {
+        return [self setUpCellForFlight:indexPath];
+    }else if (_isDriving) {
+        return [self setUpCellForDriving:indexPath];
+    }else {
+        return [self setUpCellForTransit:indexPath];
+    }
+
+}
+
+- (RouteTableViewCell *)setUpCellForFlight:(NSIndexPath *)indexPath {
+    
+    RouteTableViewCell *cell = (RouteTableViewCell *)[tableview dequeueReusableCellWithIdentifier:@"routeDetailCell" forIndexPath:indexPath];
+    
+    cell.detailBtn.hidden = true;
+    cell.detailBtn.tag = indexPath.row;
+    cell.mapHeightConstraint.constant = 0;
+    cell.stopsViewHeightConstraint.constant = 0;
+    cell.stopsView.hidden = true;
+    cell.mapView.hidden = true;
+    
     if (indexPath.row == 0) {
-        if (isSHowMapCell) {
-            RouteMapTableViewCell *cell = (RouteMapTableViewCell *)[tableView dequeueReusableCellWithIdentifier:@"RouteMapTableViewCell" forIndexPath:indexPath];
-            [cell.detailBtn addTarget:self action:@selector(showMapCell:) forControlEvents:UIControlEventTouchUpInside];
-            cell.detailBtn.tag = indexPath.row;
-            if (indexPath.row != 0) {
-                cell.circleImageView.hidden = false;
-                cell.fullLine.hidden = false;
-                cell.halfLine.hidden = true;
-                cell.leaveImageView.hidden = true;
-                cell.leaveImageHeightConstraint.constant = 0;
-                cell.labelTopConstraint.constant = -2;
-                cell.mapView.hidden = false;
-            }
-            [self loadView:cell];
-            return cell;
+        
+        cell.halfLine.hidden = false;
+        cell.leaveImageView.hidden = false;
+        
+    }else {
+        cell.fullLine.hidden = false;
+        cell.circleImageView.hidden = false;
+        cell.leaveImageHeightConstraint.constant = 0;
+        cell.labelTopConstraint.constant = -2;
+    }
+    cell.mode_Image.image = [UIImage imageNamed:@"flight_icon"];
+    cell.mode_type.text = @"Flight";
+    NSString *step_time = [HelperClass convertTimeFromMinutes:[[model.flightSegmentsArray objectAtIndex:indexPath.row] valueForKey:@"duration"]];
+    
+    cell.lblStepTime.text = step_time;
+    
+    NSString *connection = [HelperClass convertTimeFromMinutes:[[model.flightSegmentsArray objectAtIndex:indexPath.row] valueForKey:@"connectionDuration"]];
+    if (![connection isEqualToString:@""]) {
+        cell.lblConnection.hidden = false;
+        cell.lblConnectionTime.hidden = false;
+        cell.lblConnectionTime.text = connection;
+    }
+    cell.lblTotalTime.hidden = true;
+    if (model.flightSegmentsArray.count == model.stepsAdressArray.count) {
+        if (indexPath.row == 0) {
+            cell.lblAddress.text = model.country;
+            cell.lblHtmlText.text = [model.stepsAdressArray objectAtIndex:0];
+        }else {
+            [self getAddressFromAirportCode:cell andIndexPath:indexPath];
+        }
+    }
+    return cell;
+}
+
+- (void)getAddressFromAirportCode:(RouteTableViewCell *)cell andIndexPath:(NSIndexPath *)indexPath {
+    
+    cell.lblAddress.text = [model.stepsAdressArray objectAtIndex:indexPath.row-1];
+    cell.lblHtmlText.text = [model.stepsAdressArray objectAtIndex:indexPath.row];
+    
+}
+
+- (RouteTableViewCell *)setUpCellForDriving:(NSIndexPath *)indexPath {
+    
+    RouteTableViewCell *cell = (RouteTableViewCell *)[tableview dequeueReusableCellWithIdentifier:@"routeDetailCell" forIndexPath:indexPath];
+
+    cell.detailBtn.hidden = true;
+    cell.detailBtn.tag = indexPath.row;
+    cell.mapHeightConstraint.constant = 0;
+    cell.stopsViewHeightConstraint.constant = 0;
+    cell.stopsView.hidden = true;
+    cell.mapView.hidden = true;
+
+    if (indexPath.row == 0) {
+        
+        cell.halfLine.hidden = false;
+        cell.leaveImageView.hidden = false;
+        
+    }else {
+        cell.fullLine.hidden = false;
+        cell.circleImageView.hidden = false;
+        cell.leaveImageHeightConstraint.constant = 0;
+        cell.labelTopConstraint.constant = -2;
+    }
+    cell.mode_Image.image = [UIImage imageNamed:@"car_icon"];
+    cell.mode_type.text = @"Driving";
+
+    [self setValueForSteps:indexPath andCell:cell];
+    
+    return cell;
+}
+
+- (RouteTableViewCell *)setUpCellForTransit:(NSIndexPath *)indexPath {
+    
+    RouteTableViewCell *cell = (RouteTableViewCell *)[tableview dequeueReusableCellWithIdentifier:@"routeDetailCell" forIndexPath:indexPath];
+   
+    cell.detailBtn.tag = indexPath.row;
+    
+    NSString *mode_type = [self stringByStrippingHTML:[[model.transitSteps objectAtIndex:indexPath.row] valueForKey:@"travel_mode"]];
+    
+    if ([mode_type isEqualToString:@"TRANSIT"]) {
+       
+        NSString *vehiclename = [HelperClass stringByStrippingHTML:[[[[[model.transitSteps objectAtIndex:indexPath.row] valueForKey:@"transit_details"] valueForKey:@"line"] valueForKey:@"vehicle"] valueForKey:@"name"]];
+        
+        if ([vehiclename isEqualToString:@"Bus"]) {
+            cell.mode_Image.image = [UIImage imageNamed:@"bus_Icon"];
 
         }else {
-            RouteTableViewCell *cell = (RouteTableViewCell *)[tableView dequeueReusableCellWithIdentifier:@"routeDetailCell" forIndexPath:indexPath];
-            [cell.detailBtn addTarget:self action:@selector(showMapCell:) forControlEvents:UIControlEventTouchUpInside];
-            cell.detailBtn.tag = indexPath.row;
-            if (indexPath.row != 0) {
-                cell.circleImageView.hidden = false;
-                cell.fullLine.hidden = false;
-                cell.halfLine.hidden = true;
-                cell.leaveImageView.hidden = true;
-                cell.leaveImageHeightConstraint.constant = 0;
-                cell.labelTopConstraint.constant = -2;
-                cell.alertView.hidden = false;
-            }
-            return cell;
+            cell.mode_Image.image = [UIImage imageNamed:@"train_icon"];
 
         }
+        [cell.detailBtn addTarget:self action:@selector(showStopsView:) forControlEvents:UIControlEventTouchUpInside];
+        
+        cell.mode_type.text = vehiclename;
+        NSString *noOfStops = [HelperClass stringByStrippingHTML:[NSString stringWithFormat:@"%@",[[[model.transitSteps objectAtIndex:indexPath.row] valueForKey:@"transit_details"] valueForKey:@"num_stops"]]];
+        [cell.detailBtn setTitle:[NSString stringWithFormat:@"%@ stops",noOfStops] forState:UIControlStateNormal];
+        cell.lblArrivalTime.text = [HelperClass stringByStrippingHTML:[[[[model.transitSteps objectAtIndex:indexPath.row] valueForKey:@"transit_details"] valueForKey:@"arrival_time"] valueForKey:@"text"]];
+        cell.lblArrivalPlace.text = [HelperClass stringByStrippingHTML:[[[[model.transitSteps objectAtIndex:indexPath.row] valueForKey:@"transit_details"] valueForKey:@"arrival_stop"] valueForKey:@"name"]];
+        cell.lblDepartTime.text = [HelperClass stringByStrippingHTML:[[[[model.transitSteps objectAtIndex:indexPath.row] valueForKey:@"transit_details"] valueForKey:@"departure_time"] valueForKey:@"text"]];
+        cell.lblDepartPlace.text = [HelperClass stringByStrippingHTML:[[[[model.transitSteps objectAtIndex:indexPath.row] valueForKey:@"transit_details"] valueForKey:@"departure_stop"] valueForKey:@"name"]];
 
     }else {
         
-        if (isShowDetail) {
-            RouteStopsTableViewCell * cell = (RouteStopsTableViewCell *)[tableView dequeueReusableCellWithIdentifier:@"DetailCell" forIndexPath:indexPath];
-            [cell.detailBtn addTarget:self action:@selector(showDetail:) forControlEvents:UIControlEventTouchUpInside];
-            cell.detailBtn.tag = indexPath.row;
-            if (indexPath.row != 0) {
-                cell.circleImageView.hidden = false;
-                cell.fullLine.hidden = false;
-                cell.halfLine.hidden = true;
-                cell.leaveImageView.hidden = true;
-                cell.leaveImageHeightConstraint.constant = 0;
-                cell.labelTopConstraint.constant = -2;
-                cell.alertView.hidden = false;
-            }
-            return cell;
+        [cell.detailBtn setTitle:[NSString stringWithFormat:@"Detail"] forState:UIControlStateNormal];
+        [cell.detailBtn addTarget:self action:@selector(showStopsView:) forControlEvents:UIControlEventTouchUpInside];
+        cell.mode_Image.image = [UIImage imageNamed:@"walking_icon"];
+        cell.mode_type.text = @"Walking";
 
-        }else {
-            RouteTableViewCell *cell = (RouteTableViewCell *)[tableView dequeueReusableCellWithIdentifier:@"routeDetailCell" forIndexPath:indexPath];
-            [cell.detailBtn addTarget:self action:@selector(showDetail:) forControlEvents:UIControlEventTouchUpInside];
-            cell.detailBtn.tag = indexPath.row;
-            if (indexPath.row != 0) {
-                cell.circleImageView.hidden = false;
-                cell.fullLine.hidden = false;
-                cell.halfLine.hidden = true;
-                cell.leaveImageView.hidden = true;
-                cell.leaveImageHeightConstraint.constant = 0;
-                cell.labelTopConstraint.constant = -2;
-                cell.alertView.hidden = false;
-            }
-            return cell;
+        id lattitude = [[[model.transitSteps objectAtIndex:indexPath.row] valueForKey:@"start_location"] valueForKey:@"lat"];
+        id longitude = [[[model.transitSteps objectAtIndex:indexPath.row] valueForKey:@"start_location"] valueForKey:@"lng"];
+        
+        id endLatitude = [[[model.transitSteps objectAtIndex:indexPath.row] valueForKey:@"end_location"] valueForKey:@"lat"];
+        id endLongitude = [[[model.transitSteps objectAtIndex:indexPath.row] valueForKey:@"end_location"] valueForKey:@"lng"];
+        
+        CLLocation *loction = [[CLLocation alloc] initWithLatitude:[lattitude doubleValue] longitude:[longitude doubleValue]];
+        CLLocation *loction1 = [[CLLocation alloc] initWithLatitude:[endLatitude doubleValue]  longitude:[endLongitude doubleValue]];
 
+        NSString *polyline = [[[model.transitSteps objectAtIndex:indexPath.row] valueForKey:@"polyline"] valueForKey:@"points"];
+    
+        [self loadView:cell andLocation:loction andLocation:loction1 andPolyline:polyline];
+        
+    }
+
+    [self showHideViewsForTransitCell:cell andIndexPath:indexPath];
+    if (indexPath.row == 0) {
+        
+        cell.halfLine.hidden = false;
+        cell.leaveImageView.hidden = false;
+        
+    }else {
+        cell.fullLine.hidden = false;
+        cell.circleImageView.hidden = false;
+        cell.leaveImageHeightConstraint.constant = 0;
+        cell.labelTopConstraint.constant = -2;
+    }
+    [self setValueForSteps:indexPath andCell:cell];
+    return cell;
+}
+
+- (void)showHideViewsForTransitCell:(RouteTableViewCell *)cell andIndexPath:(NSIndexPath *)indexPath {
+   
+    if (isSHowMapCell && selectedIndex == indexPath) {
+        cell.stopsViewHeightConstraint.constant = 0;
+        cell.stopsView.hidden = true;
+        cell.mapHeightConstraint.constant = 235;
+        cell.mapView.hidden = false;
+
+    }else if (isShowDetail && selectedIndex == indexPath) {
+        cell.stopsViewHeightConstraint.constant = 45;
+        cell.stopsView.hidden = false;
+        cell.mapHeightConstraint.constant = 0;
+        cell.mapView.hidden = true;
+    }else {
+        cell.mapHeightConstraint.constant = 0;
+        cell.stopsViewHeightConstraint.constant = 0;
+        cell.stopsView.hidden = true;
+        cell.mapView.hidden = true;
+    }
+}
+
+- (NSDate *)setTime:(NSString *)time {
+    
+    time = [time stringByReplacingOccurrencesOfString:@" mins" withString:@""];
+    time = [time stringByReplacingOccurrencesOfString:@" min" withString:@""];
+    time = [time stringByReplacingOccurrencesOfString:@" hours" withString:@""];
+    time = [time stringByReplacingOccurrencesOfString:@" hour" withString:@""];
+    
+    NSArray *array = [time componentsSeparatedByString:@" "];
+
+    NSCalendar *gregorian = [[NSCalendar alloc] initWithCalendarIdentifier:NSCalendarIdentifierGregorian];
+    NSDateComponents *offsetComponents = [[NSDateComponents alloc] init];
+    
+    if (array.count > 1) {
+        [offsetComponents setHour:[[array objectAtIndex:0] intValue]];
+        [offsetComponents setMinute:[[array objectAtIndex:1] intValue]];
+
+    }else {
+        [offsetComponents setMinute:[[array objectAtIndex:0] intValue]];
+    }
+    return [gregorian dateByAddingComponents:offsetComponents toDate:startDate options:0];
+}
+
+- (void)setValueForSteps:(NSIndexPath *)indexPath andCell:(RouteTableViewCell *)cell
+{
+    if(self.isDriving)
+    {
+        
+        if(indexPath.row +1 < model.drivingSteps.count)
+        {
+            
+            //            CLLocation* eventLocation = [[CLLocation alloc] initWithLatitude:[[[[model.drivingSteps objectAtIndex:indexPath.row] objectForKey:@"end_location"] objectForKey:@"lat"]doubleValue] longitude:[[[[model.drivingSteps objectAtIndex:indexPath.row] objectForKey:@"end_location"] objectForKey:@"lng"] doubleValue]];
+            //
+            //
+            //            [self getAddressFromLocation:eventLocation complationBlock:^(NSString * address) {
+            //                if(address) {
+            //                    cell.lblAddress.text = address;
+            //                }
+            //            }];
+            
+            if(indexPath.row == 0)
+            {
+                NSString *str = [self stringByStrippingHTML:[self stringByStrippingHTML:[model.legsDrivingDict valueForKey:@"start_address"]]];
+                str = [str stringByReplacingOccurrencesOfString:@"Turn"
+                                                     withString:@""];
+                str = [str stringByReplacingOccurrencesOfString:@"right"
+                                                     withString:@""];
+                str = [str stringByReplacingOccurrencesOfString:@"toward"
+                                                     withString:@""];
+                str = [str stringByReplacingOccurrencesOfString:@"left"
+                                                     withString:@""];
+                str = [str stringByReplacingOccurrencesOfString:@"onto"
+                                                     withString:@""];
+                
+                cell.lblAddress.text = str;//[self stringByStrippingHTML:[[model.drivingSteps objectAtIndex:indexPath.row] objectForKey:@"html_instructions"]];
+                
+                cell.lblHtmlText.text = [self stringByStrippingHTML:[[model.drivingSteps objectAtIndex:indexPath.row] objectForKey:@"html_instructions"]];
+            }
+            else
+            {
+                NSString *str = [self stringByStrippingHTML:[[model.drivingSteps objectAtIndex:indexPath.row-1] valueForKey:@"html_instructions"]];
+                str = [str stringByReplacingOccurrencesOfString:@"Turn"
+                                                     withString:@""];
+                str = [str stringByReplacingOccurrencesOfString:@"right"
+                                                     withString:@""];
+                str = [str stringByReplacingOccurrencesOfString:@"toward"
+                                                     withString:@""];
+                str = [str stringByReplacingOccurrencesOfString:@"left"
+                                                     withString:@""];
+                str = [str stringByReplacingOccurrencesOfString:@"onto"
+                                                     withString:@""];
+                
+                cell.lblAddress.text = str;//[self stringByStrippingHTML:[[model.drivingSteps objectAtIndex:indexPath.row] objectForKey:@"html_instructions"]];
+                
+                cell.lblHtmlText.text = [self stringByStrippingHTML:[[model.drivingSteps objectAtIndex:indexPath.row] objectForKey:@"html_instructions"]];
+            }
+          
+            
+            NSString *time = [self stringByStrippingHTML:[[[model.drivingSteps objectAtIndex:indexPath.row] objectForKey:@"duration"] objectForKey:@"text"]];
+            cell.lblStepTime.text = time;
+           
+            if (indexPath.row == 0)
+            {
+                cell.lblTotalTime.text = [HelperClass getDate:self.departDate withFormat:@"HH:mm"];
+            }else
+            {
+                
+                startDate = self.departDate;
+                for (int index = 0; index < indexPath.row; index++)
+                {
+                    NSString *time = [self stringByStrippingHTML:[[[model.drivingSteps objectAtIndex:index] objectForKey:@"duration"] objectForKey:@"text"]];
+                    startDate = [self setTime:time];
+                }
+                cell.lblTotalTime.text = [HelperClass getDate:startDate withFormat:@"HH:mm"];
+            }
+        }
+        else
+        {
+            cell.lblAddress.text = [self stringByStrippingHTML:[[model.drivingSteps objectAtIndex:indexPath.row] objectForKey:@"html_instructions"]];
+            NSString *time = [self stringByStrippingHTML:[[[model.drivingSteps objectAtIndex:indexPath.row] objectForKey:@"duration"] objectForKey:@"text"]];
+            cell.lblStepTime.text = time;
+            startDate = self.departDate;
+            for (int index = 0; index < indexPath.row; index++) {
+                NSString *time = [self stringByStrippingHTML:[[[model.drivingSteps objectAtIndex:index] objectForKey:@"duration"] objectForKey:@"text"]];
+                startDate = [self setTime:time];
+            }
+            cell.lblTotalTime.text = [HelperClass getDate:startDate withFormat:@"HH:mm"];
+        }
+    }
+    
+    else
+    {
+        
+        if(indexPath.row +1 < model.transitSteps.count)
+        {
+           
+           // NSLog(@"%@", model.transitSteps);
+            if (indexPath.row == 0)
+            {
+                NSLog(@"%ld",(long)indexPath.row);
+                NSString *mode_type = [self stringByStrippingHTML:[[model.transitSteps objectAtIndex:indexPath.row] valueForKey:@"travel_mode"]];
+                NSLog(@"%@",mode_type);
+               //NSString *mode_type = [self stringByStrippingHTML:[[model.transitSteps objectAtIndex:indexPath.row-1] valueForKey:@"travel_mode"]];
+                cell.lblAddress.text = [self stringByStrippingHTML:[model.legsTransitDict valueForKey:@"start_address"]];
+                cell.lblHtmlText.text = [self stringByStrippingHTML:[[model.transitSteps objectAtIndex:indexPath.row] valueForKey:@"html_instructions"]];
+                NSLog(@"%@",[self stringByStrippingHTML:[[model.transitSteps objectAtIndex:indexPath.row] valueForKey:@"html_instructions"]]);
+
+            }
+            else
+            {
+                NSLog(@"%ld",(long)indexPath.row);
+                
+               
+                NSString *mode_type = [self stringByStrippingHTML:[[model.transitSteps objectAtIndex:indexPath.row-1] valueForKey:@"travel_mode"]];
+                if ([mode_type isEqualToString:@"TRANSIT"])
+                {
+                    NSLog(@"%@",[self stringByStrippingHTML:[[model.transitSteps objectAtIndex:indexPath.row] valueForKey:@"html_instructions"]]);
+                    NSLog(@"%@",[self stringByStrippingHTML:[[model.transitSteps objectAtIndex:indexPath.row-1] valueForKey:@"html_instructions"]]);
+                    NSLog(@"%@",mode_type);
+                    cell.lblAddress.text = [self stringByStrippingHTML:[[[[model.transitSteps objectAtIndex:indexPath.row-1] valueForKey:@"transit_details"] valueForKey:@"arrival_stop"] valueForKey:@"name"]];
+                    cell.lblHtmlText.text = [self stringByStrippingHTML:[[model.transitSteps objectAtIndex:indexPath.row] valueForKey:@"html_instructions"]];
+                }
+                else
+                {
+               
+                    NSLog(@"%@",[self stringByStrippingHTML:[[model.transitSteps objectAtIndex:indexPath.row-1] valueForKey:@"html_instructions"]]);
+                    NSLog(@"%@",[self stringByStrippingHTML:[[model.transitSteps objectAtIndex:indexPath.row] valueForKey:@"html_instructions"]]);
+                    NSString *str = [self stringByStrippingHTML:[[model.transitSteps objectAtIndex:indexPath.row-1] valueForKey:@"html_instructions"]];
+                    str = [str stringByReplacingOccurrencesOfString:@"Walk to"
+                                                         withString:@""];
+                    cell.lblAddress.text = str;
+                    cell.lblHtmlText.text = [self stringByStrippingHTML:[[model.transitSteps objectAtIndex:indexPath.row] valueForKey:@"html_instructions"]];
+                
+                }
+            }
+
+            
+            NSString *time = [self stringByStrippingHTML:[[[model.transitSteps objectAtIndex:indexPath.row] valueForKey:@"duration"] valueForKey:@"text"]];
+            cell.lblStepTime.text = time;
+           
+            if (indexPath.row == 0)
+            {
+                cell.lblTotalTime.text = [HelperClass getDate:self.departDate withFormat:@"HH:mm"];
+            }
+            else
+            {
+                startDate = self.departDate;
+
+                for (int index = 0; index < indexPath.row; index++) {
+                    NSString *time = [self stringByStrippingHTML:[[[model.transitSteps objectAtIndex:index] valueForKey:@"duration"] valueForKey:@"text"]];
+                    startDate = [self setTime:time];
+                }
+                cell.lblTotalTime.text = [HelperClass getDate:startDate withFormat:@"HH:mm"];
+            }
+        }
+        else
+        {
+            NSString *mode_type = [self stringByStrippingHTML:[[model.transitSteps objectAtIndex:indexPath.row] valueForKey:@"travel_mode"]];
+
+            if ([mode_type isEqualToString:@"TRANSIT"]) {
+                cell.lblAddress.text = [self stringByStrippingHTML:[[[[model.transitSteps objectAtIndex:indexPath.row] valueForKey:@"transit_details"] valueForKey:@"departure_stop"] valueForKey:@"name"]];
+                cell.lblHtmlText.text = [self stringByStrippingHTML:[[[[model.transitSteps objectAtIndex:indexPath.row] valueForKey:@"transit_details"] valueForKey:@"arrival_stop"] valueForKey:@"name"]];
+            }
+            else
+            {
+                /*
+                cell.lblAddress.text = [self stringByStrippingHTML:[[model.transitSteps objectAtIndex:indexPath.row] valueForKey:@"html_instructions"]];
+                if(indexPath.row +1 == model.transitSteps.count) {
+                   cell.lblHtmlText.text = [self stringByStrippingHTML:[[[[model.transitSteps objectAtIndex:indexPath.row+1] valueForKey:@"transit_details"] valueForKey:@"departure_stop"] valueForKey:@"name"]];
+                }else {
+                    cell.lblHtmlText.text = [self stringByStrippingHTML:[[[[model.transitSteps objectAtIndex:indexPath.row] valueForKey:@"transit_details"] valueForKey:@"departure_stop"] valueForKey:@"name"]];
+                }
+                 
+                 */
+            
+            }
+            NSString *time = [self stringByStrippingHTML:[[[model.transitSteps objectAtIndex:indexPath.row] valueForKey:@"duration"] valueForKey:@"text"]];
+            cell.lblStepTime.text = time;
+           
+            startDate = self.departDate;
+            
+            for (int index = 0; index < indexPath.row; index++) {
+                NSString *time = [self stringByStrippingHTML:[[[model.transitSteps objectAtIndex:index] valueForKey:@"duration"] valueForKey:@"text"]];
+                startDate = [self setTime:time];
+            }
+            cell.lblTotalTime.text = [HelperClass getDate:startDate withFormat:@"HH:mm"];
         }
     }
 }
 
-- (void)addlabels:(RouteTableViewCell *)clickedCell {
-   
-    lblY = clickedCell.detailBtn.frame.origin.y + clickedCell.detailBtn.frame.size.height + 5;
-    int lblX = clickedCell.detailBtn.frame.origin.x;
-    for (int index = 0; index < stopsArray.count; index++) {
-        
-        UILabel *lbl = [[UILabel alloc] initWithFrame:CGRectMake(lblX,lblY, 200, 17)];
-        lbl.text = [NSString stringWithFormat:@"%@",[stopsArray objectAtIndex:index]];
-        lbl.font = [UIFont systemFontOfSize:12];
-        [clickedCell addSubview:lbl];
-        lblY = lblY+19;
-    }
-//    lblY = lblY + cell.alertView.frame.size.height;
+-(NSString *)stringByStrippingHTML:(NSString *)str {
+    
+//    str = [str stringByReplacingOccurrencesOfString:@"Walk To"
+//                                         withString:@""];
+    NSRange r;
+    while ((r = [str rangeOfString:@"<[^>]+>" options:NSRegularExpressionSearch]).location != NSNotFound)
+        str = [str stringByReplacingCharactersInRange:r withString:@""];
+    return str;
 }
 
 
@@ -153,86 +578,40 @@
 
 }
 
-- (IBAction)showDetail:(id)sender {
-   
-//    NSIndexPath *indexPath = [NSIndexPath indexPathForRow:[sender tag] inSection:0];
-//    RouteTableViewCell *routeCell = (RouteTableViewCell *)[tableview cellForRowAtIndexPath:indexPath];
-
-    tag = (int)[sender tag];
-    isShowDetail =! isShowDetail;
-//    if (isShowDetail) {
-////        [self addlabels:routeCell];
-//    }else {
-//        
-//    }
-    [tableview reloadData];
-}
-
-- (IBAction)showMapCell:(id)sender {
-    isSHowMapCell =! isSHowMapCell;
-    [tableview reloadData];
-}
 
 
-- (void)loadView:(RouteMapTableViewCell *)cell {
-    
-    ModelLocator *model = [ModelLocator getInstance];
-    
-    CLLocation *loction = [[CLLocation alloc] initWithLatitude:model.userCoordinates.latitude longitude:model.userCoordinates.longitude];
-    CLLocation *loction1 = [[CLLocation alloc] initWithLatitude:51.4794846  longitude:-3.1829101];
+
+- (void)loadView:(RouteTableViewCell *)cell andLocation:(CLLocation *)startLocation andLocation:(CLLocation *)endLocation andPolyline:(NSString *)polyline {
     
     mapView = [GMSMapView mapWithFrame:CGRectMake(0, 0, SCREEN_WIDTH-100, [HelperClass getCellHeight:235 OriginalWidth:375].height) camera:camera];
     
-    
     GMSCoordinateBounds *bounds =
-    [[GMSCoordinateBounds alloc] initWithCoordinate:loction.coordinate coordinate:loction1.coordinate];
+    [[GMSCoordinateBounds alloc] initWithCoordinate:startLocation.coordinate coordinate:endLocation.coordinate];
     [mapView moveCamera:[GMSCameraUpdate fitBounds:bounds]];
     
     
-    mapView.userInteractionEnabled = false;
+    mapView.userInteractionEnabled = true;
     [cell.mapView addSubview:mapView];
     
     // Creates a marker in the center of the map.
     
     
+    GMSMarker *marker = [[GMSMarker alloc]init];
+    marker.position = startLocation.coordinate;
+    marker.map = mapView;
     
-    [self drawPathFrom:loction toDestination:loction1];
+    GMSMarker *marker1 = [[GMSMarker alloc]init];
+    marker1.position = endLocation.coordinate;
+    marker1.map = mapView;
     
-    GMSMarker *marker=[[GMSMarker alloc]init];
-    marker.position=loction.coordinate;
-    marker.map=mapView;
-    
-    GMSMarker *marker1=[[GMSMarker alloc]init];
-    marker1.position=loction1.coordinate;
-    marker1.map=mapView;
-    
-    
+    UIColor *color = [UIColor colorWithRed:30.0/255.0 green:179.0/255.0 blue:252.0/255.0 alpha:1.0];
+    [self createDashedLine:startLocation.coordinate andNext:endLocation.coordinate andColor:color andEncodedPath:polyline];
+
     
 }
 
 
--(void)drawPathFrom:(CLLocation*)source toDestination:(CLLocation*)destination{
-    
-    NSString *baseUrl = [NSString stringWithFormat:@"http://maps.googleapis.com/maps/api/directions/json?origin=%f,%f&destination=%f,%f&sensor=true", source.coordinate.latitude,  source.coordinate.longitude, destination.coordinate.latitude,  destination.coordinate.longitude];
-    
-    NSURL *url = [NSURL URLWithString:[baseUrl stringByAddingPercentEscapesUsingEncoding:NSUTF8StringEncoding]];
-    NSLog(@"Url: %@", url);
-    NSURLRequest *request = [NSURLRequest requestWithURL:url];
-    
-    [NSURLConnection sendAsynchronousRequest:request queue:[NSOperationQueue mainQueue] completionHandler:^(NSURLResponse *response, NSData *data, NSError *connectionError) {
-        if(!connectionError){
-            NSDictionary *result        = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
-            NSArray *routes             = [result objectForKey:@"routes"];
-            NSDictionary *firstRoute    = [routes objectAtIndex:0];
-            NSString *encodedPath       = [firstRoute[@"overview_polyline"] objectForKey:@"points"];
-            UIColor *color = [UIColor colorWithRed:30.0/255.0 green:179.0/255.0 blue:252.0/255.0 alpha:1.0];
-            [self createDashedLine:source.coordinate andNext:destination.coordinate andColor:color andEncodedPath:encodedPath];
-        }
-    }];
-    
-}
-
-- (void) createDashedLine:(CLLocationCoordinate2D )thisPoint andNext:(CLLocationCoordinate2D )nextPoint andColor:(UIColor *)colour andEncodedPath:(NSString *)encodedPath
+- (void)createDashedLine:(CLLocationCoordinate2D )thisPoint andNext:(CLLocationCoordinate2D )nextPoint andColor:(UIColor *)colour andEncodedPath:(NSString *)encodedPath
 {
     
     double difLat = nextPoint.latitude - thisPoint.latitude;
@@ -292,7 +671,7 @@
                 gradColor,
                 [GMSStrokeStyle solidColor:[UIColor colorWithWhite:0 alpha:0]],
                 ];
-    _step = 50000;
+    _step = 500;
 }
 
 
@@ -309,6 +688,28 @@
     // Get the new view controller using [segue destinationViewController].
     // Pass the selected object to the new view controller.
 }
+ 
 */
+
+
+
+typedef void(^addressCompletion)(NSString *);
+
+-(void)getAddressFromLocation:(CLLocation *)location complationBlock:(addressCompletion)completionBlock
+{
+    __block CLPlacemark* placemark;
+    __block NSString *address = nil;
+    
+    CLGeocoder* geocoder = [CLGeocoder new];
+    [geocoder reverseGeocodeLocation:location completionHandler:^(NSArray *placemarks, NSError *error)
+     {
+         if (error == nil && [placemarks count] > 0)
+         {
+             placemark = [placemarks lastObject];
+             address = [NSString stringWithFormat:@"%@, %@ %@", placemark.name, placemark.postalCode, placemark.locality];
+             completionBlock(address);
+         }
+     }];
+}
 
 @end

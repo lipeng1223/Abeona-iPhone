@@ -104,7 +104,7 @@
     [mapView moveCamera:[GMSCameraUpdate fitBounds:bounds]];
 
     
-    mapView.userInteractionEnabled = false;
+    mapView.userInteractionEnabled = true;
     [cell.customView addSubview:mapView];
     
     // Creates a marker in the center of the map.
@@ -130,18 +130,23 @@
     
     NSString *baseUrl = [NSString stringWithFormat:@"http://maps.googleapis.com/maps/api/directions/json?origin=%f,%f&destination=%f,%f&sensor=true", source.coordinate.latitude,  source.coordinate.longitude, destination.coordinate.latitude,  destination.coordinate.longitude];
     
-    NSURL *url = [NSURL URLWithString:[baseUrl stringByAddingPercentEscapesUsingEncoding:NSUTF8StringEncoding]];
+    NSURL *url = [NSURL URLWithString:[baseUrl stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLFragmentAllowedCharacterSet]]];
     NSLog(@"Url: %@", url);
     NSURLRequest *request = [NSURLRequest requestWithURL:url];
+    
+    
     
     [NSURLConnection sendAsynchronousRequest:request queue:[NSOperationQueue mainQueue] completionHandler:^(NSURLResponse *response, NSData *data, NSError *connectionError) {
         if(!connectionError){
             NSDictionary *result        = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
             NSArray *routes             = [result objectForKey:@"routes"];
-            NSDictionary *firstRoute    = [routes objectAtIndex:0];
-            NSString *encodedPath       = [firstRoute[@"overview_polyline"] objectForKey:@"points"];
-            UIColor *color = [UIColor colorWithRed:30.0/255.0 green:179.0/255.0 blue:252.0/255.0 alpha:1.0];
-            [self createDashedLine:source.coordinate andNext:destination.coordinate andColor:color andEncodedPath:encodedPath];
+            if (routes.count > 0) {
+                
+                NSDictionary *firstRoute    = [routes objectAtIndex:0];
+                NSString *encodedPath       = [firstRoute[@"overview_polyline"] objectForKey:@"points"];
+                UIColor *color = [UIColor colorWithRed:30.0/255.0 green:179.0/255.0 blue:252.0/255.0 alpha:1.0];
+                [self createDashedLine:source.coordinate andNext:destination.coordinate andColor:color andEncodedPath:encodedPath];
+            }
         }
     }];
     

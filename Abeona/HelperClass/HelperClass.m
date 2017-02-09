@@ -11,6 +11,28 @@
 @implementation HelperClass
 
 
++(NSString *)stringByStrippingHTML:(NSString *)str {
+    str = [NSString stringWithFormat:@"%@",str];
+    NSRange r;
+    while ((r = [str rangeOfString:@"<[^>]+>" options:NSRegularExpressionSearch]).location != NSNotFound)
+        str = [str stringByReplacingCharactersInRange:r withString:@""];
+    return str;
+}
+
+/** Check Null Value as String ***/
++(NSString *) checkforNullvalue:(id) stringVal
+{
+    
+    NSString *string = [NSString stringWithFormat:@"%@",stringVal];
+    
+    if ([string isEqualToString:@"<null>"]||[string  isEqualToString:@"(null)"] ||[string  isEqualToString:@"0000-00-00"] || [string  isEqualToString:@""] || string.length==0 ||
+        string==nil ||[string isKindOfClass:[NSNull class]]) {
+        string =@"";
+    }
+    return string ;
+}
+
+
 +(CGSize)getCellHeight:(int)originalHeight OriginalWidth:(int)originalWidth
 {
     float height=(originalHeight*SCREEN_WIDTH)/originalWidth;
@@ -70,8 +92,40 @@
     return color;
 }
 
++(NSString *)convertTimeFromMinutes:(NSString *)second {
+    
+    NSMutableString *timeLeft = [[NSMutableString alloc]init];
+    
+    
+    NSInteger seconds = [second integerValue];
+    
+    NSInteger days = (int) (floor(seconds / (60 * 24)));
+    if(days) seconds -= days * 60 * 24;
+    
+    NSInteger hours = (int) (floor(seconds / 60));
+    if(hours) seconds -= hours * 60;
+    
+    NSInteger minutes = (int)seconds;
+    if(minutes)seconds -= minutes;
+    
+    if(days) {
+        [timeLeft appendString:[NSString stringWithFormat:@"%ldd ", (long)days]];
+    }
+    
+    if(hours) {
+        [timeLeft appendString:[NSString stringWithFormat: @"%ldh ", (long)hours]];
+    }
+    
+    if(minutes) {
+        [timeLeft appendString: [NSString stringWithFormat: @"%ldm",(long)minutes]];
+    }
+    
+    
+    return timeLeft;
+    
+}
 
-+ (void)showAlertView:(NSString*)heading andMessage:(NSString *)message andView:(UIViewController *)view {
++ (void)showAlertView:(NSString*)heading andMessage:(NSString *)message {
     
 //    UIAlertController *alertView = [UIAlertController alertControllerWithTitle:heading message:message preferredStyle:UIAlertControllerStyleAlert];
 //    
@@ -87,26 +141,24 @@
 }
 
 
-+(NSString *)getDate:(NSString *) date withFormat :(NSString *)dateFormat{
++(NSString *)getDate:(NSDate *)date withFormat:(NSString *)dateFormat{
 
     NSDateFormatter* format = [[NSDateFormatter alloc] init];
-    [format setLocale:[[NSLocale alloc] initWithLocaleIdentifier:@"en_US_POSIX"]];
-    [format setDateFormat:@"YYYY-MM-dd HH:mm:ss"];
-    NSDate* dateObj = [format dateFromString:date];
+    [format setLocale:[NSLocale currentLocale]];
     [format setDateFormat:dateFormat];
     
-    return [format stringFromDate:dateObj];
+    return [format stringFromDate:date];
 }
 
-+(NSString *)getDate:(NSString *) date withColonFormat :(NSString *)dateFormat{
++(NSDate *)getDate:(NSString *) date withColonFormat :(NSString *)dateFormat{
     
     NSDateFormatter* format = [[NSDateFormatter alloc] init];
     [format setLocale:[[NSLocale alloc] initWithLocaleIdentifier:@"en_US_POSIX"]];
-    [format setDateFormat:@"YYYY-MM-dd HH:mm:ss"];
-    NSDate* dateObj = [format dateFromString:date];
     [format setDateFormat:dateFormat];
+    NSDate* dateObj = [format dateFromString:date];
+//    [format setDateFormat:dateFormat];
     
-    return [format stringFromDate:dateObj];
+    return dateObj;
 }
 
 +(NSString *)getUserToken{
@@ -121,6 +173,18 @@
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     NSString *token = [defaults objectForKey:@"id"];
     return token;
+}
+
+/*** validate Email Address ***/
+
++(BOOL) NSStringIsValidEmail:(NSString *)checkString
+{
+    BOOL stricterFilter = NO;
+    NSString *stricterFilterString = @"^[A-Z0-9a-z\\._%+-]+@([A-Za-z0-9-]+\\.)+[A-Za-z]{2,4}$";
+    NSString *laxString = @"^.+@([A-Za-z0-9-]+\\.)+[A-Za-z]{2}[A-Za-z]*$";
+    NSString *emailRegex = stricterFilter ? stricterFilterString : laxString;
+    NSPredicate *emailTest = [NSPredicate predicateWithFormat:@"SELF MATCHES %@", emailRegex];
+    return [emailTest evaluateWithObject:checkString];
 }
 
 /*** Image Url with Cache ***/

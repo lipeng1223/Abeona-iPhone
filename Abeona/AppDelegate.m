@@ -17,12 +17,11 @@
 
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
     // Override point for customization after application launch.
-    //AIzaSyDY6suhoKhvv9C6ibXBtCuVQTfluSL38AI
     
 
     self.locationManager = [[CLLocationManager alloc] init];
     self.locationManager.delegate = (id)self;
-    [GMSServices provideAPIKey:@"AIzaSyDY6suhoKhvv9C6ibXBtCuVQTfluSL38AI"];
+    [GMSServices provideAPIKey:@"AIzaSyDBrEtOB7k5kKT2Vop_kwH69bIeCbLFH34"];
     if ([self.locationManager respondsToSelector:@selector(requestWhenInUseAuthorization)])
     {
         [self.locationManager requestWhenInUseAuthorization];
@@ -62,9 +61,42 @@
 }
 
 -(void)locationManager:(CLLocationManager *)manager didUpdateLocations:(NSArray *)locations {
+    ModelLocator *model = [ModelLocator getInstance];
     
     [self.locationManager stopUpdatingLocation];
-    [ModelLocator getInstance].userCoordinates = manager.location.coordinate;
+//    model.userCoordinates = manager.location.coordinate;
+//   model.userCoordinates = CLLocationCoordinate2DMake(40.0799, 116.6031);
+    [self updateLocation];
+}
+
+- (void)updateLocation {
+    
+    ModelLocator *model = [ModelLocator getInstance];
+
+    CLGeocoder *geocoder = [[CLGeocoder alloc] init];
+    CLLocation *newLocation ;
+    
+    newLocation= [[CLLocation alloc]initWithLatitude:model.userCoordinates.latitude
+                                           longitude:model.userCoordinates.longitude];
+    
+    [geocoder reverseGeocodeLocation:newLocation
+                   completionHandler:^(NSArray *placemarks, NSError *error) {
+                       
+                       if (error) {
+                           NSLog(@"Geocode failed with error: %@", error.localizedDescription);
+                           return;
+                       }
+                       if (placemarks && placemarks.count > 0)
+                       {
+                           CLPlacemark *placemark = placemarks[0];
+                           NSDictionary *addressDictionary =
+                           placemark.addressDictionary;
+                           
+                           NSLog(@"%@ ", addressDictionary);
+                           model.country = [addressDictionary valueForKey:@"Country"];
+                       }
+                   }];
+    
 }
 
 - (void)locationManager:(CLLocationManager *)manager
